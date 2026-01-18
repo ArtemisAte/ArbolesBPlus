@@ -111,50 +111,192 @@ public class OperacionesArbolBPlus {
 
         manejarSubida(nodo, claveSubir, nuevoNodo);
     }
+    
+    // --- MÉTODOS DE ELIMINACIÓN ---
+
+    /*
+     * ALGORITMO Eliminar(nodo raíz, T clave)
+     * INICIO
+     * hoja <- BuscarHoja(raíz, clave)
+     * SI clave EXISTE EN hoja ENTONCES
+     * EliminarClave(hoja, clave)
+     * SI (hoja != raíz) Y (TAM(hoja.claves) < d) ENTONCES
+     * LLAMAR CorregirUnderflow(hoja)
+     * FIN SI
+     * SINO
+     * ESCRIBIR "Clave no encontrada"
+     * FIN SI
+     * FIN
+    */
+    public void eliminar(int clave) {
+        Nodo hoja = buscarHoja(raiz, clave);
+        int idx = hoja.claves.indexOf(clave);
+
+        if (idx != -1) {
+            hoja.claves.remove(idx);
+            if (hoja != raiz && hoja.claves.size() < d) {
+                corregirUnderflow(hoja);
+            }
+        } else {
+            JOptionPane.showMessageDialog(null, "La clave no existe en el árbol.");
+        }
+    }
+
+    /*
+     * ALGORITMO CorregirUnderflow(nodo n)
+     * INICIO
+     * p <- n.padre
+     * idx <- POSICIÓN DE n EN p.hijos
+     * SI (idx > 0) Y (TAM(p.hijos[idx-1].claves) > d) ENTONCES
+     * LLAMAR PrestarDeIzquierda(n, p.hijos[idx-1], p, idx-1)
+     * SINO SI (idx < TAM(p.hijos)-1) Y (TAM(p.hijos[idx+1].claves) > d) ENTONCES
+     * LLAMAR PrestarDeDerecha(n, p.hijos[idx+1], p, idx)
+     * SINO
+     * SI (idx > 0) ENTONCES LLAMAR Fusionar(p.hijos[idx-1], n)
+     * SINO ENTONCES LLAMAR Fusionar(n, p.hijos[idx+1])
+     * FIN SI
+     * FIN
+     */
+    private void corregirUnderflow(Nodo nodo) {
+        if (nodo == raiz) return;
+
+        Nodo padre = nodo.padre;
+        int idxHijo = padre.hijos.indexOf(nodo);
+
+        if (idxHijo > 0) {
+            Nodo hermanoIzquierdo = padre.hijos.get(idxHijo - 1);
+            if (hermanoIzquierdo.claves.size() > d) {
+                prestarDeIzquierda(nodo, hermanoIzquierdo, padre, idxHijo - 1);
+                return;
+            }
+        }
+
+        if (idxHijo < padre.hijos.size() - 1) {
+            Nodo hermanoDerecho = padre.hijos.get(idxHijo + 1);
+            if (hermanoDerecho.claves.size() > d) {
+                prestarDeDerecha(nodo, hermanoDerecho, padre, idxHijo);
+                return;
+            }
+        }
+
+        if (idxHijo > 0) {
+            fusionar(padre.hijos.get(idxHijo - 1), nodo);
+        } else {
+            fusionar(nodo, padre.hijos.get(idxHijo + 1));
+        }
+    }
+
+    /*
+     * ALGORITMO PrestarDeIzquierda(nodo n, hermano h, padre p, entero i)
+     * INICIO
+     * c <- h.claves.ÚLTIMO()
+     * ELIMINAR h.claves.ÚLTIMO()
+     * INSERTAR c EN n.claves[0]
+     * p.claves[i] <- n.claves[0]
+     * FIN
+     */
+    private void prestarDeIzquierda(Nodo nodo, Nodo hermano, Nodo padre, int idxPadre) {
+        int clavePrestada = hermano.claves.remove(hermano.claves.size() - 1);
+        nodo.claves.add(0, clavePrestada);
+        padre.claves.set(idxPadre, nodo.claves.get(0));
+    }
+
+    /*
+     * ALGORITMO PrestarDeDerecha(nodo n, hermano h, padre p, entero i)
+     * INICIO
+     * c <- h.claves[0]
+     * ELIMINAR h.claves[0]
+     * INSERTAR c AL FINAL DE n.claves
+     * p.claves[i] <- h.claves[0]
+     * FIN
+     */
+    private void prestarDeDerecha(Nodo nodo, Nodo hermano, Nodo padre, int idxPadre) {
+        int clavePrestada = hermano.claves.remove(0);
+        nodo.claves.add(clavePrestada);
+        padre.claves.set(idxPadre, hermano.claves.get(0));
+    }
+
+    /*
+     * ALGORITMO Fusionar(izq, der)
+     * INICIO
+     * p <- izq.padre
+     * izq.claves <- izq.claves + der.claves
+     * SI (izq NO ES hoja) ENTONCES
+     * izq.hijos <- izq.hijos + der.hijos
+     * FIN SI
+     * ELIMINAR p.claves[i] Y p.hijos[der]
+     * SI (p = raíz) Y (TAM(p.claves) = 0) ENTONCES
+     * raíz <- izq
+     * SINO SI (p != raíz) Y (TAM(p.claves) < d) ENTONCES
+     * LLAMAR CorregirUnderflow(p)
+     * FIN SI
+     * FIN
+     */
+    private void fusionar(Nodo izq, Nodo der) {
+        Nodo padre = izq.padre;
+        izq.claves.addAll(der.claves);
+
+        if (!izq.esHoja) {
+            izq.hijos.addAll(der.hijos);
+            for (Nodo hijo : der.hijos) hijo.padre = izq;
+        }
+
+        int idxDer = padre.hijos.indexOf(der);
+        padre.claves.remove(idxDer - 1);
+        padre.hijos.remove(idxDer);
+
+        if (padre == raiz && padre.claves.isEmpty()) {
+            raiz = izq;
+            raiz.padre = null;
+        } else if (padre != raiz && padre.claves.size() < d) {
+            corregirUnderflow(padre);
+        }
+    }
+    
      // ==================== OPERACIÓN: RECORRER POR NIVELES ====================
     
     /*
-Algoritmo ImprimirPorNiveles
-Si (raiz == NULL) Entonces
-    Retornar
-Fin Si
-Crear(sb)
-Crear(cola)
-Encolar(cola, raiz)
-nivel <- 0
-Mientras (cola NO esté vacía) Repetir
-    nodosNivel <- Tamaño(cola)
-    Escribir("Nivel ", nivel, ": ")
-    i <- 0
-    Mientras (i < nodosNivel) Repetir
-        nodo <- Desencolar(cola)
-        Escribir("[ ")
-        j <- 0
-        Mientras (j < nodo.n) Repetir
-            Escribir(nodo.claves[j])
-            Si (j < nodo.n - 1) Entonces
-                Escribir(" | ")
-            Fin Si
-            j <- j + 1
-        Fin Mientras
-        Escribir(" ]  ")
-        Si (nodo.esHoja == Falso) Entonces
+    Algoritmo ImprimirPorNiveles
+    Si (raiz == NULL) Entonces
+        Retornar
+    Fin Si
+    Crear(sb)
+    Crear(cola)
+    Encolar(cola, raiz)
+    nivel <- 0
+    Mientras (cola NO esté vacía) Repetir
+        nodosNivel <- Tamaño(cola)
+        Escribir("Nivel ", nivel, ": ")
+        i <- 0
+        Mientras (i < nodosNivel) Repetir
+            nodo <- Desencolar(cola)
+            Escribir("[ ")
             j <- 0
-            Mientras (j <= nodo.n) Repetir
-                Si (nodo.hijos[j] != NULL) Entonces
-                    Encolar(cola, nodo.hijos[j])
+            Mientras (j < nodo.n) Repetir
+                Escribir(nodo.claves[j])
+                Si (j < nodo.n - 1) Entonces
+                    Escribir(" | ")
                 Fin Si
                 j <- j + 1
             Fin Mientras
-        Fin Si
-        i <- i + 1
+            Escribir(" ]  ")
+            Si (nodo.esHoja == Falso) Entonces
+                j <- 0
+                Mientras (j <= nodo.n) Repetir
+                    Si (nodo.hijos[j] != NULL) Entonces
+                        Encolar(cola, nodo.hijos[j])
+                    Fin Si
+                    j <- j + 1
+                Fin Mientras
+            Fin Si
+            i <- i + 1
+        Fin Mientras
+        EscribirSaltoLinea
+        nivel <- nivel + 1
     Fin Mientras
-    EscribirSaltoLinea
-    nivel <- nivel + 1
-Fin Mientras
-MostrarVentana(sb)
-Fin Algoritmo ImprimirPorNiveles
-*/
+    MostrarVentana(sb)
+    Fin Algoritmo ImprimirPorNiveles
+    */
 
     /**
      * Muestra el árbol por niveles en una ventana gráfica.
