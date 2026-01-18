@@ -134,7 +134,7 @@ public class Visualizacion {
             // Dibujar título
             g2.setColor(Color.DARK_GRAY);
             g2.setFont(new Font("Arial", Font.BOLD, 14));
-            g2.drawString("Árbol B+ - Claves Separadas en Recuadros", 20, 25);
+            g2.drawString("Árbol B+", 20, 25);
             
             // Dibujar árbol centrado
             if (raiz != null) {
