@@ -1,7 +1,3 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package com.arbolesbplus;
 
 import java.awt.Font;
@@ -11,18 +7,21 @@ import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 
-/**
- *
- * @author Athenea
- */
 public class OperacionesArbolBPlus {
- public Nodo raiz;
-    public static final int d = 2; // Grado mínimo
+
+    public Nodo raiz;
+    public static final int d = 2; // ORDEN 2: máximo 3 claves por nodo
+    
+    // CONSTANTES CLARAS
+    private static final int MAX_CLAVES = 3;    // 2*d - 1 = 3
+    private static final int MIN_CLAVES = 1;    // d - 1 = 1
 
     public OperacionesArbolBPlus() {
         raiz = new Nodo(true, d);
     }
 
+    // ======================= INSERCIÓN ===========================
+    
     public void insertar(int clave) {
         Nodo hoja = buscarHoja(raiz, clave);
         insertarOrdenado(hoja.claves, clave);
@@ -38,7 +37,11 @@ public class OperacionesArbolBPlus {
         if (actual.esHoja) return actual;
         
         int i = 0;
-        while (i < actual.claves.size() && clave >= actual.claves.get(i)) {
+        while (i < actual.claves.size() && clave > actual.claves.get(i)) {
+            i++;
+        }
+        // En B+, si clave es igual, va al hijo derecho (i+1)
+        if (i < actual.claves.size() && clave == actual.claves.get(i)) {
             i++;
         }
         return buscarHoja(actual.hijos.get(i), clave);
@@ -60,6 +63,10 @@ public class OperacionesArbolBPlus {
         // Mover la mitad derecha a la nueva hoja
         nuevaHoja.claves.addAll(new ArrayList<>(hoja.claves.subList(puntoCorte, hoja.claves.size())));
         hoja.claves.subList(puntoCorte, hoja.claves.size()).clear();
+
+        // CORRECCIÓN: Conectar las hojas en la lista enlazada
+        nuevaHoja.siguiente = hoja.siguiente;
+        hoja.siguiente = nuevaHoja;
 
         // En B+, la primera clave de la nueva hoja sube al padre como guía
         int claveSubir = nuevaHoja.claves.get(0);
@@ -112,198 +119,336 @@ public class OperacionesArbolBPlus {
         manejarSubida(nodo, claveSubir, nuevoNodo);
     }
     
-    // --- MÉTODOS DE ELIMINACIÓN ---
-
-    /*
-     * ALGORITMO Eliminar(nodo raíz, T clave)
-     * INICIO
-     * hoja <- BuscarHoja(raíz, clave)
-     * SI clave EXISTE EN hoja ENTONCES
-     * EliminarClave(hoja, clave)
-     * SI (hoja != raíz) Y (TAM(hoja.claves) < d) ENTONCES
-     * LLAMAR CorregirUnderflow(hoja)
-     * FIN SI
-     * SINO
-     * ESCRIBIR "Clave no encontrada"
-     * FIN SI
-     * FIN
-    */
+    // ======================= ELIMINACIÓN =========================
+    
     public void eliminar(int clave) {
+        if (raiz == null) {
+            JOptionPane.showMessageDialog(null, "El árbol está vacío.");
+            return;
+        }
+        
         Nodo hoja = buscarHoja(raiz, clave);
         int idx = hoja.claves.indexOf(clave);
-
+        
         if (idx != -1) {
+            // Guardar si es la primera clave
+            boolean esPrimeraClave = (idx == 0);
+            int claveEliminada = hoja.claves.get(idx);
+            
+            // Eliminar de la hoja
             hoja.claves.remove(idx);
-            if (hoja != raiz && hoja.claves.size() < d) {
-                corregirUnderflow(hoja);
+            
+            // IMPORTANTE: Solo corregir underflow si está POR DEBAJO del mínimo
+            if (hoja != raiz && hoja.claves.size() < MIN_CLAVES) {
+                corregirUnderflowHoja(hoja);
             }
+            
+            // SIEMPRE actualizar índices si la clave eliminada era la primera
+            // Incluso si no hubo underflow
+            if (esPrimeraClave && !hoja.claves.isEmpty()) {
+                actualizarIndices(claveEliminada, hoja.claves.get(0));
+            }
+            
+            // Caso especial: raíz hoja vacía
+            if (hoja == raiz && hoja.claves.isEmpty()) {
+                raiz = null;
+            }
+            
+            JOptionPane.showMessageDialog(null, "Clave " + clave + " eliminada correctamente.");
+            
         } else {
-            JOptionPane.showMessageDialog(null, "La clave no existe en el árbol.");
+            JOptionPane.showMessageDialog(null, "La clave " + clave + " no existe.");
         }
     }
-
-    /*
-     * ALGORITMO CorregirUnderflow(nodo n)
-     * INICIO
-     * p <- n.padre
-     * idx <- POSICIÓN DE n EN p.hijos
-     * SI (idx > 0) Y (TAM(p.hijos[idx-1].claves) > d) ENTONCES
-     * LLAMAR PrestarDeIzquierda(n, p.hijos[idx-1], p, idx-1)
-     * SINO SI (idx < TAM(p.hijos)-1) Y (TAM(p.hijos[idx+1].claves) > d) ENTONCES
-     * LLAMAR PrestarDeDerecha(n, p.hijos[idx+1], p, idx)
-     * SINO
-     * SI (idx > 0) ENTONCES LLAMAR Fusionar(p.hijos[idx-1], n)
-     * SINO ENTONCES LLAMAR Fusionar(n, p.hijos[idx+1])
-     * FIN SI
-     * FIN
-     */
-    private void corregirUnderflow(Nodo nodo) {
-        if (nodo == raiz) return;
-
-        Nodo padre = nodo.padre;
-        int idxHijo = padre.hijos.indexOf(nodo);
-
-        if (idxHijo > 0) {
-            Nodo hermanoIzquierdo = padre.hijos.get(idxHijo - 1);
-            if (hermanoIzquierdo.claves.size() > d) {
-                prestarDeIzquierda(nodo, hermanoIzquierdo, padre, idxHijo - 1);
-                return;
+    
+    private void actualizarIndices(int viejaClave, int nuevaClave) {
+        if (raiz == null || raiz.esHoja) return;
+        
+        Nodo actual = raiz;
+        boolean encontrado = false;
+        
+        // Buscar recursivamente la clave vieja en los índices
+        while (!actual.esHoja && !encontrado) {
+            // Buscar en las claves del nodo actual
+            for (int i = 0; i < actual.claves.size(); i++) {
+                if (actual.claves.get(i) == viejaClave) {
+                    actual.claves.set(i, nuevaClave);
+                    encontrado = true;
+                    break;
+                }
+            }
+            
+            // Si no se encontró en este nodo, buscar en el hijo adecuado
+            if (!encontrado) {
+                int i = 0;
+                while (i < actual.claves.size() && viejaClave >= actual.claves.get(i)) {
+                    i++;
+                }
+                if (i < actual.hijos.size()) {
+                    actual = actual.hijos.get(i);
+                } else {
+                    break; // Evitar IndexOutOfBounds
+                }
             }
         }
-
-        if (idxHijo < padre.hijos.size() - 1) {
-            Nodo hermanoDerecho = padre.hijos.get(idxHijo + 1);
-            if (hermanoDerecho.claves.size() > d) {
-                prestarDeDerecha(nodo, hermanoDerecho, padre, idxHijo);
-                return;
+    }
+    
+    private void corregirUnderflowHoja(Nodo hoja) {
+        Nodo padre = hoja.padre;
+        if (padre == null) return;
+        
+        int idx = padre.hijos.indexOf(hoja);
+        
+        // Solo hacer préstamo/fusión si está POR DEBAJO del mínimo
+        if (hoja.claves.size() < MIN_CLAVES) {
+            // PRÉSTAMO IZQUIERDO
+            if (idx > 0) {
+                Nodo hermanoIzq = padre.hijos.get(idx - 1);
+                // El hermano puede prestar si tiene MÁS del mínimo
+                if (hermanoIzq.claves.size() > MIN_CLAVES) {
+                    // Tomar la última clave del hermano izquierdo
+                    int clavePrestada = hermanoIzq.claves.remove(hermanoIzq.claves.size() - 1);
+                    hoja.claves.add(0, clavePrestada);
+                    
+                    // Actualizar clave en padre
+                    padre.claves.set(idx - 1, hoja.claves.get(0));
+                    return;
+                }
+            }
+            
+            // PRÉSTAMO DERECHO
+            if (idx < padre.hijos.size() - 1) {
+                Nodo hermanoDer = padre.hijos.get(idx + 1);
+                // El hermano puede prestar si tiene MÁS del mínimo
+                if (hermanoDer.claves.size() > MIN_CLAVES) {
+                    // Tomar la primera clave del hermano derecho
+                    int clavePrestada = hermanoDer.claves.remove(0);
+                    hoja.claves.add(clavePrestada);
+                    
+                    // Actualizar clave en padre
+                    padre.claves.set(idx, hermanoDer.claves.get(0));
+                    return;
+                }
+            }
+            
+            // FUSIÓN (solo si ambos hermanos están en el mínimo)
+            if (idx > 0) {
+                fusionarConHermanoIzquierdo(padre, idx);
+            } else {
+                fusionarConHermanoDerecho(padre, idx);
             }
         }
-
-        if (idxHijo > 0) {
-            fusionar(padre.hijos.get(idxHijo - 1), nodo);
-        } else {
-            fusionar(nodo, padre.hijos.get(idxHijo + 1));
-        }
     }
-
-    /*
-     * ALGORITMO PrestarDeIzquierda(nodo n, hermano h, padre p, entero i)
-     * INICIO
-     * c <- h.claves.ÚLTIMO()
-     * ELIMINAR h.claves.ÚLTIMO()
-     * INSERTAR c EN n.claves[0]
-     * p.claves[i] <- n.claves[0]
-     * FIN
-     */
-    private void prestarDeIzquierda(Nodo nodo, Nodo hermano, Nodo padre, int idxPadre) {
-        int clavePrestada = hermano.claves.remove(hermano.claves.size() - 1);
-        nodo.claves.add(0, clavePrestada);
-        padre.claves.set(idxPadre, nodo.claves.get(0));
-    }
-
-    /*
-     * ALGORITMO PrestarDeDerecha(nodo n, hermano h, padre p, entero i)
-     * INICIO
-     * c <- h.claves[0]
-     * ELIMINAR h.claves[0]
-     * INSERTAR c AL FINAL DE n.claves
-     * p.claves[i] <- h.claves[0]
-     * FIN
-     */
-    private void prestarDeDerecha(Nodo nodo, Nodo hermano, Nodo padre, int idxPadre) {
-        int clavePrestada = hermano.claves.remove(0);
-        nodo.claves.add(clavePrestada);
-        padre.claves.set(idxPadre, hermano.claves.get(0));
-    }
-
-    /*
-     * ALGORITMO Fusionar(izq, der)
-     * INICIO
-     * p <- izq.padre
-     * izq.claves <- izq.claves + der.claves
-     * SI (izq NO ES hoja) ENTONCES
-     * izq.hijos <- izq.hijos + der.hijos
-     * FIN SI
-     * ELIMINAR p.claves[i] Y p.hijos[der]
-     * SI (p = raíz) Y (TAM(p.claves) = 0) ENTONCES
-     * raíz <- izq
-     * SINO SI (p != raíz) Y (TAM(p.claves) < d) ENTONCES
-     * LLAMAR CorregirUnderflow(p)
-     * FIN SI
-     * FIN
-     */
-    private void fusionar(Nodo izq, Nodo der) {
-        Nodo padre = izq.padre;
-        izq.claves.addAll(der.claves);
-
-        if (!izq.esHoja) {
-            izq.hijos.addAll(der.hijos);
-            for (Nodo hijo : der.hijos) hijo.padre = izq;
-        }
-
-        int idxDer = padre.hijos.indexOf(der);
-        padre.claves.remove(idxDer - 1);
-        padre.hijos.remove(idxDer);
-
-        if (padre == raiz && padre.claves.isEmpty()) {
-            raiz = izq;
+    
+    private void fusionarConHermanoIzquierdo(Nodo padre, int idx) {
+        Nodo hermanoIzq = padre.hijos.get(idx - 1);
+        Nodo hoja = padre.hijos.get(idx);
+        
+        // Mover todas las claves de la hoja al hermano izquierdo
+        hermanoIzq.claves.addAll(hoja.claves);
+        
+        // Actualizar enlace de hojas
+        hermanoIzq.siguiente = hoja.siguiente;
+        
+        // Eliminar clave separadora en padre y la hoja
+        padre.claves.remove(idx - 1);
+        padre.hijos.remove(idx);
+        
+        // Si el padre queda con underflow
+        if (padre != raiz && padre.claves.size() < MIN_CLAVES) {
+            corregirUnderflowInterno(padre);
+        } else if (padre == raiz && padre.claves.isEmpty()) {
+            raiz = hermanoIzq;
             raiz.padre = null;
-        } else if (padre != raiz && padre.claves.size() < d) {
-            corregirUnderflow(padre);
         }
     }
     
-     // ==================== OPERACIÓN: RECORRER POR NIVELES ====================
+    private void fusionarConHermanoDerecho(Nodo padre, int idx) {
+        Nodo hoja = padre.hijos.get(idx);
+        Nodo hermanoDer = padre.hijos.get(idx + 1);
+        
+        // Mover todas las claves del hermano derecho a la hoja
+        hoja.claves.addAll(hermanoDer.claves);
+        
+        // Actualizar enlace de hojas
+        hoja.siguiente = hermanoDer.siguiente;
+        
+        // Eliminar clave separadora en padre y el hermano derecho
+        padre.claves.remove(idx);
+        padre.hijos.remove(idx + 1);
+        
+        // Si el padre queda con underflow
+        if (padre != raiz && padre.claves.size() < MIN_CLAVES) {
+            corregirUnderflowInterno(padre);
+        } else if (padre == raiz && padre.claves.isEmpty()) {
+            raiz = hoja;
+            raiz.padre = null;
+        }
+    }
     
-    /*
-    Algoritmo ImprimirPorNiveles
-    Si (raiz == NULL) Entonces
-        Retornar
-    Fin Si
-    Crear(sb)
-    Crear(cola)
-    Encolar(cola, raiz)
-    nivel <- 0
-    Mientras (cola NO esté vacía) Repetir
-        nodosNivel <- Tamaño(cola)
-        Escribir("Nivel ", nivel, ": ")
-        i <- 0
-        Mientras (i < nodosNivel) Repetir
-            nodo <- Desencolar(cola)
-            Escribir("[ ")
-            j <- 0
-            Mientras (j < nodo.n) Repetir
-                Escribir(nodo.claves[j])
-                Si (j < nodo.n - 1) Entonces
-                    Escribir(" | ")
-                Fin Si
-                j <- j + 1
-            Fin Mientras
-            Escribir(" ]  ")
-            Si (nodo.esHoja == Falso) Entonces
+    private void corregirUnderflowInterno(Nodo nodo) {
+        if (nodo == raiz) {
+            if (nodo.claves.isEmpty() && !nodo.hijos.isEmpty()) {
+                raiz = nodo.hijos.get(0);
+                raiz.padre = null;
+            }
+            return;
+        }
+        
+        Nodo padre = nodo.padre;
+        int idx = padre.hijos.indexOf(nodo);
+        
+        // PRÉSTAMO IZQUIERDO
+        if (idx > 0) {
+            Nodo hermanoIzq = padre.hijos.get(idx - 1);
+            if (hermanoIzq.claves.size() > MIN_CLAVES) {
+                // Rotar derecha
+                int clavePadre = padre.claves.get(idx - 1);
+                int claveHermano = hermanoIzq.claves.remove(hermanoIzq.claves.size() - 1);
+                Nodo hijoHermano = hermanoIzq.hijos.remove(hermanoIzq.hijos.size() - 1);
+                
+                nodo.claves.add(0, clavePadre);
+                padre.claves.set(idx - 1, claveHermano);
+                nodo.hijos.add(0, hijoHermano);
+                hijoHermano.padre = nodo;
+                return;
+            }
+        }
+        
+        // PRÉSTAMO DERECHO
+        if (idx < padre.hijos.size() - 1) {
+            Nodo hermanoDer = padre.hijos.get(idx + 1);
+            if (hermanoDer.claves.size() > MIN_CLAVES) {
+                // Rotar izquierda
+                int clavePadre = padre.claves.get(idx);
+                int claveHermano = hermanoDer.claves.remove(0);
+                Nodo hijoHermano = hermanoDer.hijos.remove(0);
+                
+                nodo.claves.add(clavePadre);
+                padre.claves.set(idx, claveHermano);
+                nodo.hijos.add(hijoHermano);
+                hijoHermano.padre = nodo;
+                return;
+            }
+        }
+        
+        // FUSIÓN
+        if (idx > 0) {
+            fusionarInternoConHermanoIzquierdo(padre, idx);
+        } else {
+            fusionarInternoConHermanoDerecho(padre, idx);
+        }
+    }
+    
+    private void fusionarInternoConHermanoIzquierdo(Nodo padre, int idx) {
+        Nodo hermanoIzq = padre.hijos.get(idx - 1);
+        Nodo nodo = padre.hijos.get(idx);
+        
+        // Bajar clave separadora del padre
+        int clavePadre = padre.claves.get(idx - 1);
+        hermanoIzq.claves.add(clavePadre);
+        hermanoIzq.claves.addAll(nodo.claves);
+        
+        // Mover hijos
+        for (Nodo hijo : nodo.hijos) {
+            hijo.padre = hermanoIzq;
+            hermanoIzq.hijos.add(hijo);
+        }
+        
+        // Eliminar del padre
+        padre.claves.remove(idx - 1);
+        padre.hijos.remove(idx);
+        
+        // Verificar underflow en padre
+        if (padre != raiz && padre.claves.size() < MIN_CLAVES) {
+            corregirUnderflowInterno(padre);
+        } else if (padre == raiz && padre.claves.isEmpty()) {
+            raiz = hermanoIzq;
+            raiz.padre = null;
+        }
+    }
+    
+    private void fusionarInternoConHermanoDerecho(Nodo padre, int idx) {
+        Nodo nodo = padre.hijos.get(idx);
+        Nodo hermanoDer = padre.hijos.get(idx + 1);
+        
+        // Bajar clave separadora del padre
+        int clavePadre = padre.claves.get(idx);
+        nodo.claves.add(clavePadre);
+        nodo.claves.addAll(hermanoDer.claves);
+        
+        // Mover hijos
+        for (Nodo hijo : hermanoDer.hijos) {
+            hijo.padre = nodo;
+            nodo.hijos.add(hijo);
+        }
+        
+        // Eliminar del padre
+        padre.claves.remove(idx);
+        padre.hijos.remove(idx + 1);
+        
+        // Verificar underflow en padre
+        if (padre != raiz && padre.claves.size() < MIN_CLAVES) {
+            corregirUnderflowInterno(padre);
+        } else if (padre == raiz && padre.claves.isEmpty()) {
+            raiz = nodo;
+            raiz.padre = null;
+        }
+    }
+    
+    // ================= VISUALIZACIÓN =============================
+        /*
+        Algoritmo ImprimirPorNiveles
+        Si (raiz == NULL) Entonces
+            Retornar
+        Fin Si
+        Crear(sb)
+        Crear(cola)
+        Encolar(cola, raiz)
+        nivel <- 0
+        Mientras (cola NO esté vacía) Repetir
+            nodosNivel <- Tamaño(cola)
+            Escribir("Nivel ", nivel, ": ")
+            i <- 0
+            Mientras (i < nodosNivel) Repetir
+                nodo <- Desencolar(cola)
+                Escribir("[ ")
                 j <- 0
-                Mientras (j <= nodo.n) Repetir
-                    Si (nodo.hijos[j] != NULL) Entonces
-                        Encolar(cola, nodo.hijos[j])
+                Mientras (j < nodo.n) Repetir
+                    Escribir(nodo.claves[j])
+                    Si (j < nodo.n - 1) Entonces
+                        Escribir(" | ")
                     Fin Si
                     j <- j + 1
                 Fin Mientras
-            Fin Si
-            i <- i + 1
+                Escribir(" ]  ")
+                Si (nodo.esHoja == Falso) Entonces
+                    j <- 0
+                    Mientras (j <= nodo.n) Repetir
+                        Si (nodo.hijos[j] != NULL) Entonces
+                            Encolar(cola, nodo.hijos[j])
+                        Fin Si
+                        j <- j + 1
+                    Fin Mientras
+                Fin Si
+                i <- i + 1
+            Fin Mientras
+            EscribirSaltoLinea
+            nivel <- nivel + 1
         Fin Mientras
-        EscribirSaltoLinea
-        nivel <- nivel + 1
-    Fin Mientras
-    MostrarVentana(sb)
-    Fin Algoritmo ImprimirPorNiveles
-    */
+        MostrarVentana(sb)
+        Fin Algoritmo ImprimirPorNiveles
+        */
 
     /**
      * Muestra el árbol por niveles en una ventana gráfica.
      * Usa recorrido BFS (por anchura).
      */
     public void imprimirPorNiveles() {
-        if (raiz == null) return;
+        if (raiz == null) {
+            JOptionPane.showMessageDialog(null, "El árbol está vacío.");
+            return;
+        }
         
         StringBuilder sb = new StringBuilder();
         java.util.Queue<Nodo> cola = new java.util.LinkedList<>();
@@ -313,24 +458,18 @@ public class OperacionesArbolBPlus {
         while (!cola.isEmpty()) {
             int nodosNivel = cola.size();
             sb.append("Nivel ").append(nivel).append(": ");
-            
             for (int i = 0; i < nodosNivel; i++) {
                 Nodo nodo = cola.poll();
-                
-                // Formatear nodo
-                sb.append("[ ");
-                for (int j = 0; j < nodo.d; j++) {
+                sb.append("[");
+                for (int j = 0; j < nodo.claves.size(); j++) {
                     sb.append(nodo.claves.get(j));
-                    if (j < nodo.d - 1) sb.append(" | ");
+                    if (j < nodo.claves.size() - 1) sb.append(",");
                 }
-                sb.append(" ]  ");
+                sb.append("] ");
                 
-                // Agregar hijos a la cola
                 if (!nodo.esHoja) {
-                    for (int j = 0; j <= nodo.d; j++) {
-                        if (nodo.hijos.get(j) != null) {
-                            cola.add(nodo.hijos.get(j));
-                        }
+                    for (Nodo hijo : nodo.hijos) {
+                        cola.add(hijo);
                     }
                 }
             }
@@ -338,14 +477,28 @@ public class OperacionesArbolBPlus {
             nivel++;
         }
         
-        // Mostrar en ventana
-
+        // Mostrar hojas enlazadas
+        sb.append("\nHojas enlazadas: ");
+        Nodo hoja = raiz;
+        while (!hoja.esHoja && !hoja.hijos.isEmpty()) {
+            hoja = hoja.hijos.get(0);
+        }
+        while (hoja != null) {
+            sb.append("[");
+            for (int j = 0; j < hoja.claves.size(); j++) {
+                sb.append(hoja.claves.get(j));
+                if (j < hoja.claves.size() - 1) sb.append(",");
+            }
+            sb.append("] -> ");
+            hoja = hoja.siguiente;
+        }
+        sb.append("null");
+        
         JTextArea textArea = new JTextArea(sb.toString());
         textArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
         textArea.setEditable(false);
-        JOptionPane.showMessageDialog(null, 
-            new JScrollPane(textArea), 
-            "Estructura por Niveles", 
-            JOptionPane.INFORMATION_MESSAGE);
+        
+        JOptionPane.showMessageDialog(null, new JScrollPane(textArea),
+                "Estructura del B+ por Niveles", 1);
     }
 }

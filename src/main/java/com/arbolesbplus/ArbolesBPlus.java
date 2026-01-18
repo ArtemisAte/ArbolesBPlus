@@ -42,8 +42,7 @@ public class ArbolesBPlus {
                 String valorStr = JOptionPane.showInputDialog("Ingrese la clave a eliminar:");
                 if (valorStr != null) {
                     int clave = Integer.parseInt(valorStr);
-                    arbolIns.eliminar(clave); // Este es el método que crearás
-                    JOptionPane.showMessageDialog(null, "Operación de eliminación realizada.");
+                    arbolIns.eliminar(clave);
                 }
             }else if(me==4){  
                Visualizacion.visualizar(arbolIns.raiz);

@@ -12,7 +12,7 @@ import javax.swing.JScrollPane;
 
 /**
  * Clase encargada de la representación gráfica del Árbol B+.
- * Ajustada para reflejar cambios dinámicos tras la eliminación.
+ * Ajustada para reflejar cambios dinámicos tras la eliminación y evitar errores de visualización.
  * @author Athenea
  */
 public class Visualizacion {
@@ -42,7 +42,7 @@ public class Visualizacion {
         public PanelArbol(Nodo raiz) {
             this.raiz = raiz;
             this.setBackground(Color.WHITE);
-            // Tamaño amplio para evitar que el árbol se corte
+            // Tamaño amplio para evitar que el árbol se corte por los bordes
             this.setPreferredSize(new Dimension(2500, 1000));
         }
 
@@ -51,33 +51,34 @@ public class Visualizacion {
             super.paintComponent(g);
             if (raiz != null) {
                 Graphics2D g2 = (Graphics2D) g;
-                // Suavizado de bordes para una mejor apariencia visual
+                // Suavizado de bordes para una mejor apariencia visual (Antialiasing)
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 
-                // Inicia la recursión desde el centro superior
+                // Inicia la recursión desde el centro superior de la pantalla
                 dibujarNodo(g2, raiz, getWidth() / 2, 50, getWidth() / 5);
             }
         }
 
         private void dibujarNodo(Graphics2D g, Nodo nodo, int x, int y, int rangoHorizontal) {
-            // Se usa .size() en lugar de .d para soportar nodos con pocas claves tras borrar
+            // CORRECCIÓN CLAVE: Usar el tamaño real de la lista de claves (.size())
+            // Esto evita errores cuando un nodo queda con menos de 'd' claves tras eliminar
             int numClaves = nodo.claves.size();
             int anchoTotalNodo = numClaves * ANCHO_CELDA;
             int inicioX = x - (anchoTotalNodo / 2);
 
-            // 1. DIBUJO DE LAS CELDAS Y CLAVES
+            // 1. DIBUJO DE LAS CELDAS Y LAS CLAVES (VALORES)
             for (int i = 0; i < numClaves; i++) {
                 int celdaX = inicioX + (i * ANCHO_CELDA);
                 
-                // Dibujar el fondo del cuadro de la clave
+                // Dibujar el fondo del cuadro (gris claro)
                 g.setColor(new Color(245, 245, 245));
                 g.fillRect(celdaX, y, ANCHO_CELDA, ALTO_NODO);
                 
-                // Dibujar el borde
+                // Dibujar el borde negro
                 g.setColor(Color.BLACK);
                 g.drawRect(celdaX, y, ANCHO_CELDA, ALTO_NODO);
 
-                // Dibujar el texto centrado en la celda
+                // Dibujar el texto centrado dentro de cada celda
                 String texto = String.valueOf(nodo.claves.get(i));
                 FontMetrics fm = g.getFontMetrics();
                 int textoX = celdaX + (ANCHO_CELDA - fm.stringWidth(texto)) / 2;
@@ -85,22 +86,26 @@ public class Visualizacion {
                 g.drawString(texto, textoX, textoY);
             }
 
-            // 2. DIBUJO DE HIJOS Y CONECTORES
+            // 2. DIBUJO DE LOS HIJOS Y SUS LÍNEAS CONECTORAS
             if (!nodo.esHoja) {
+                // Usamos el tamaño real de la lista de hijos para mayor robustez
                 int numHijos = nodo.hijos.size();
                 
                 for (int i = 0; i < numHijos; i++) {
-                    if (nodo.hijos.get(i) != null) {
-                        // Cálculo de la posición X del hijo basándose en el rango disponible
+                    Nodo hijoActual = nodo.hijos.get(i);
+                    
+                    // Solo dibujamos si el hijo existe (evita errores si una referencia se perdió)
+                    if (hijoActual != null) {
+                        // Cálculo matemático para distribuir los hijos proporcionalmente en el espacio
                         int hijoX = x - rangoHorizontal + (i * 2 * rangoHorizontal / Math.max(1, numHijos - 1));
                         int hijoY = y + ESPACIO_VERTICAL;
 
-                        // Línea gris que une el padre con el hijo
+                        // Dibujar línea gris desde la base del padre al hijo
                         g.setColor(Color.LIGHT_GRAY);
                         g.drawLine(x, y + ALTO_NODO, hijoX, hijoY);
 
-                        // Llamada recursiva para procesar el siguiente nivel
-                        dibujarNodo(g, nodo.hijos.get(i), hijoX, hijoY, (int)(rangoHorizontal * 0.55));
+                        // Llamada recursiva: reducimos el rango horizontal para que los nietos no se encimen
+                        dibujarNodo(g, hijoActual, hijoX, hijoY, (int)(rangoHorizontal * 0.55));
                     }
                 }
             }
