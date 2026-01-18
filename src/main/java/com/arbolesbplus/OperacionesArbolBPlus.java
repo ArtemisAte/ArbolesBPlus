@@ -307,6 +307,80 @@ public class OperacionesArbolBPlus {
             raiz.padre = null;
         }
     }
+
+     // ================= BUSQUEDA =============================
+//Algoritmo BuscarEnArbolBPlus(raiz, claveBuscada)
+//    Si (raiz == NULL) Entonces
+//        Escribir("El árbol está vacío")
+//        Retornar FALSO
+//    Fin Si
+//    nodoActual <- raiz
+//    Mientras (nodoActual.esHoja == FALSO) Repetir
+//        i <- 0
+//        Mientras (i < Tamaño(nodoActual.claves) Y claveBuscada > nodoActual.claves[i]) Repetir
+//            i <- i + 1
+//        Fin Mientras
+        // Regla del B+: si es igual, ir al hijo derecho
+//        Si (i < Tamaño(nodoActual.claves) Y claveBuscada == nodoActual.claves[i]) Entonces
+//            i <- i + 1
+//        Fin Si
+//        nodoActual <- nodoActual.hijos[i]
+//    Fin Mientras
+    // Ya estamos en una hoja
+//    i <- 0
+//    Mientras (i < Tamaño(nodoActual.claves)) Repetir
+//        Si (nodoActual.claves[i] == claveBuscada) Entonces
+//            Escribir("Clave encontrada")
+//            Retornar VERDADERO
+//        Fin Si
+//        i <- i + 1
+//    Fin Mientras
+// Escribir("Clave NO encontrada")
+//  Retornar FALSO
+//Fin Algoritmo BuscarEnArbolBPlus
+
+// Método público que inicia la búsqueda y muestra el resultado en una ventana
+public void buscarYMostrar(int clave) {
+    // Verifica si el árbol está vacío
+    if (raiz == null) {
+        // Muestra mensaje si no hay nodos en el árbol
+        JOptionPane.showMessageDialog(null, "El árbol está vacío.");
+        return; // Sale del método
+    }
+    // Llama al método recursivo para buscar la clave desde la raíz
+    boolean encontrado = buscarRecursivo(raiz, clave);
+    // Si la clave fue encontrada
+    if (encontrado) {
+        // Muestra mensaje positivo
+        JOptionPane.showMessageDialog(null,
+                "La clave " + clave + " SI existe en el árbol B+");
+    } else {
+        // Si no fue encontrada, muestra mensaje negativo
+        JOptionPane.showMessageDialog(null,
+                "La clave " + clave + " NO existe en el árbol B+");
+    }
+}
+// Método privado recursivo que recorre el árbol B+ para buscar la clave
+private boolean buscarRecursivo(Nodo actual, int clave) {
+    // Variable para recorrer las claves del nodo actual
+    int i = 0;
+    // Avanza mientras la clave buscada sea mayor que la clave actual del nodo
+    while (i < actual.claves.size() && clave > actual.claves.get(i)) {
+        i++; // Mueve el índice a la siguiente clave
+    }
+    // Si el nodo actual es una hoja del árbol B+
+    if (actual.esHoja) {
+        // Verifica si la clave existe exactamente en esta posición
+        return (i < actual.claves.size() && actual.claves.get(i) == clave);
+    }
+    // Si no es hoja y la clave coincide con una clave separadora del nodo
+    // En árboles B+, se baja al hijo derecho
+    if (i < actual.claves.size() && clave == actual.claves.get(i)) {
+        i++; // Se mueve al hijo derecho correspondiente
+    }
+    // Llamada recursiva para continuar la búsqueda en el hijo adecuado
+    return buscarRecursivo(actual.hijos.get(i), clave);
+}
     
     // ================= VISUALIZACIÓN =============================
         /*
