@@ -39,7 +39,11 @@ public class ArbolesBPlus {
                 
                 break;
             }else if(me==3){
-            
+                String valorStr = JOptionPane.showInputDialog("Ingrese la clave a eliminar:");
+                if (valorStr != null) {
+                    int clave = Integer.parseInt(valorStr);
+                    arbolIns.eliminar(clave);
+                }
             }else if(me==4){  
                Visualizacion.visualizar(arbolIns.raiz);
                  
