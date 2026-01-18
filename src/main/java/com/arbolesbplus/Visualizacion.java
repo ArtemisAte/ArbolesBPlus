@@ -141,8 +141,6 @@ public class Visualizacion {
                 dibujarNodoConRecuadros(g2, raiz, getWidth() / 2, 60, getWidth() / 3, 0);
             }
             
-            // Dibujar leyenda simple
-            dibujarLeyenda(g2);
         }
 
         private int dibujarNodoConRecuadros(Graphics2D g, Nodo nodo, int x, int y, int rangoHorizontal, int nivel) {
