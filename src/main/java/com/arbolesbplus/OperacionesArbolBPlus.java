@@ -119,279 +119,191 @@ public class OperacionesArbolBPlus {
         manejarSubida(nodo, claveSubir, nuevoNodo);
     }
     
-    // ======================= ELIMINACIÓN =========================
-    
+    // ======================= ELIMINACIÓN COMPACTA =========================
+
     public void eliminar(int clave) {
-        if (raiz == null) {
-            JOptionPane.showMessageDialog(null, "El árbol está vacío.");
-            return;
-        }
-        
+        if (raiz == null) return;
+
         Nodo hoja = buscarHoja(raiz, clave);
         int idx = hoja.claves.indexOf(clave);
-        
-        if (idx != -1) {
-            // Guardar si es la primera clave
-            boolean esPrimeraClave = (idx == 0);
-            int claveEliminada = hoja.claves.get(idx);
-            
-            // Eliminar de la hoja
-            hoja.claves.remove(idx);
-            
-            // IMPORTANTE: Solo corregir underflow si está POR DEBAJO del mínimo
-            if (hoja != raiz && hoja.claves.size() < MIN_CLAVES) {
-                corregirUnderflowHoja(hoja);
-            }
-            
-            // SIEMPRE actualizar índices si la clave eliminada era la primera
-            // Incluso si no hubo underflow
-            if (esPrimeraClave && !hoja.claves.isEmpty()) {
-                actualizarIndices(claveEliminada, hoja.claves.get(0));
-            }
-            
-            // Caso especial: raíz hoja vacía
-            if (hoja == raiz && hoja.claves.isEmpty()) {
-                raiz = null;
-            }
-            
-            JOptionPane.showMessageDialog(null, "Clave " + clave + " eliminada correctamente.");
-            
-        } else {
-            JOptionPane.showMessageDialog(null, "La clave " + clave + " no existe.");
+
+        if (idx == -1) return;
+
+        boolean esPrimeraClave = (idx == 0);
+        int claveEliminada = hoja.claves.get(idx);
+
+        hoja.claves.remove(idx);
+
+        // Corrección de underflow en hojas
+        if (hoja != raiz && hoja.claves.size() < MIN_CLAVES) {
+            corregirUnderflowHoja(hoja);
+        }
+
+        // Actualizar índice si se eliminó la primera clave
+        if (esPrimeraClave && !hoja.claves.isEmpty()) {
+            actualizarIndices(claveEliminada, hoja.claves.get(0));
+        }
+
+        // Caso especial: raíz hoja vacía
+        if (hoja == raiz && hoja.claves.isEmpty()) {
+            raiz = null;
         }
     }
-    
     private void actualizarIndices(int viejaClave, int nuevaClave) {
-        if (raiz == null || raiz.esHoja) return;
-        
-        Nodo actual = raiz;
-        boolean encontrado = false;
-        
-        // Buscar recursivamente la clave vieja en los índices
-        while (!actual.esHoja && !encontrado) {
-            // Buscar en las claves del nodo actual
-            for (int i = 0; i < actual.claves.size(); i++) {
-                if (actual.claves.get(i) == viejaClave) {
-                    actual.claves.set(i, nuevaClave);
-                    encontrado = true;
-                    break;
-                }
+    if (raiz == null || raiz.esHoja) return;
+    
+    Nodo actual = raiz;
+    boolean encontrado = false;
+    
+    // Buscar la clave vieja en los índices
+    while (!actual.esHoja && !encontrado) {
+        for (int i = 0; i < actual.claves.size(); i++) {
+            if (actual.claves.get(i) == viejaClave) {
+                actual.claves.set(i, nuevaClave);
+                encontrado = true;
+                break;
             }
-            
-            // Si no se encontró en este nodo, buscar en el hijo adecuado
-            if (!encontrado) {
-                int i = 0;
-                while (i < actual.claves.size() && viejaClave >= actual.claves.get(i)) {
-                    i++;
-                }
-                if (i < actual.hijos.size()) {
-                    actual = actual.hijos.get(i);
-                } else {
-                    break; // Evitar IndexOutOfBounds
-                }
+        }
+        
+        // Si no se encontró, ir al hijo adecuado
+        if (!encontrado) {
+            int i = 0;
+            while (i < actual.claves.size() && viejaClave >= actual.claves.get(i)) {
+                i++;
+            }
+            if (i < actual.hijos.size()) {
+                actual = actual.hijos.get(i);
+            } else {
+                break;
             }
         }
     }
-    
+    }
+
     private void corregirUnderflowHoja(Nodo hoja) {
         Nodo padre = hoja.padre;
         if (padre == null) return;
-        
+
         int idx = padre.hijos.indexOf(hoja);
-        
-        // Solo hacer préstamo/fusión si está POR DEBAJO del mínimo
-        if (hoja.claves.size() < MIN_CLAVES) {
-            // PRÉSTAMO IZQUIERDO
-            if (idx > 0) {
-                Nodo hermanoIzq = padre.hijos.get(idx - 1);
-                // El hermano puede prestar si tiene MÁS del mínimo
-                if (hermanoIzq.claves.size() > MIN_CLAVES) {
-                    // Tomar la última clave del hermano izquierdo
-                    int clavePrestada = hermanoIzq.claves.remove(hermanoIzq.claves.size() - 1);
-                    hoja.claves.add(0, clavePrestada);
-                    
-                    // Actualizar clave en padre
-                    padre.claves.set(idx - 1, hoja.claves.get(0));
-                    return;
-                }
-            }
-            
-            // PRÉSTAMO DERECHO
-            if (idx < padre.hijos.size() - 1) {
-                Nodo hermanoDer = padre.hijos.get(idx + 1);
-                // El hermano puede prestar si tiene MÁS del mínimo
-                if (hermanoDer.claves.size() > MIN_CLAVES) {
-                    // Tomar la primera clave del hermano derecho
-                    int clavePrestada = hermanoDer.claves.remove(0);
-                    hoja.claves.add(clavePrestada);
-                    
-                    // Actualizar clave en padre
-                    padre.claves.set(idx, hermanoDer.claves.get(0));
-                    return;
-                }
-            }
-            
-            // FUSIÓN (solo si ambos hermanos están en el mínimo)
-            if (idx > 0) {
-                fusionarConHermanoIzquierdo(padre, idx);
-            } else {
-                fusionarConHermanoDerecho(padre, idx);
-            }
+
+        // Intentar préstamo izquierdo
+        if (idx > 0 && padre.hijos.get(idx - 1).claves.size() > MIN_CLAVES) {
+            Nodo hermanoIzq = padre.hijos.get(idx - 1);
+            int clavePrestada = hermanoIzq.claves.remove(hermanoIzq.claves.size() - 1);
+            hoja.claves.add(0, clavePrestada);
+            padre.claves.set(idx - 1, hoja.claves.get(0));
+            return;
+        }
+
+        // Intentar préstamo derecho
+        if (idx < padre.hijos.size() - 1 && padre.hijos.get(idx + 1).claves.size() > MIN_CLAVES) {
+            Nodo hermanoDer = padre.hijos.get(idx + 1);
+            int clavePrestada = hermanoDer.claves.remove(0);
+            hoja.claves.add(clavePrestada);
+            padre.claves.set(idx, hermanoDer.claves.get(0));
+            return;
+        }
+
+        // Fusión (con izquierdo si existe, sino con derecho)
+        if (idx > 0) {
+            fusionarHojas(padre, idx - 1, idx);
+        } else {
+            fusionarHojas(padre, idx, idx + 1);
         }
     }
-    
-    private void fusionarConHermanoIzquierdo(Nodo padre, int idx) {
-        Nodo hermanoIzq = padre.hijos.get(idx - 1);
-        Nodo hoja = padre.hijos.get(idx);
-        
-        // Mover todas las claves de la hoja al hermano izquierdo
-        hermanoIzq.claves.addAll(hoja.claves);
-        
-        // Actualizar enlace de hojas
-        hermanoIzq.siguiente = hoja.siguiente;
-        
-        // Eliminar clave separadora en padre y la hoja
-        padre.claves.remove(idx - 1);
-        padre.hijos.remove(idx);
-        
-        // Si el padre queda con underflow
-        if (padre != raiz && padre.claves.size() < MIN_CLAVES) {
+
+    private void fusionarHojas(Nodo padre, int idxIzq, int idxDer) {
+        Nodo izquierdo = padre.hijos.get(idxIzq);
+        Nodo derecho = padre.hijos.get(idxDer);
+
+        // Mover claves del derecho al izquierdo
+        izquierdo.claves.addAll(derecho.claves);
+        izquierdo.siguiente = derecho.siguiente;
+
+        // Eliminar clave separadora y nodo derecho
+        padre.claves.remove(idxIzq);
+        padre.hijos.remove(idxDer);
+
+        // Verificar underflow en padre
+        if (padre.claves.size() < MIN_CLAVES && padre != raiz) {
             corregirUnderflowInterno(padre);
         } else if (padre == raiz && padre.claves.isEmpty()) {
-            raiz = hermanoIzq;
+            raiz = izquierdo;
             raiz.padre = null;
         }
     }
-    
-    private void fusionarConHermanoDerecho(Nodo padre, int idx) {
-        Nodo hoja = padre.hijos.get(idx);
-        Nodo hermanoDer = padre.hijos.get(idx + 1);
-        
-        // Mover todas las claves del hermano derecho a la hoja
-        hoja.claves.addAll(hermanoDer.claves);
-        
-        // Actualizar enlace de hojas
-        hoja.siguiente = hermanoDer.siguiente;
-        
-        // Eliminar clave separadora en padre y el hermano derecho
-        padre.claves.remove(idx);
-        padre.hijos.remove(idx + 1);
-        
-        // Si el padre queda con underflow
-        if (padre != raiz && padre.claves.size() < MIN_CLAVES) {
-            corregirUnderflowInterno(padre);
-        } else if (padre == raiz && padre.claves.isEmpty()) {
-            raiz = hoja;
-            raiz.padre = null;
-        }
-    }
-    
+
     private void corregirUnderflowInterno(Nodo nodo) {
-        if (nodo == raiz) {
-            if (nodo.claves.isEmpty() && !nodo.hijos.isEmpty()) {
+        if (nodo == raiz && nodo.claves.isEmpty()) {
+            if (!nodo.hijos.isEmpty()) {
                 raiz = nodo.hijos.get(0);
                 raiz.padre = null;
             }
             return;
         }
-        
+
         Nodo padre = nodo.padre;
+        if (padre == null) return;
+
         int idx = padre.hijos.indexOf(nodo);
-        
-        // PRÉSTAMO IZQUIERDO
-        if (idx > 0) {
+
+        // Préstamo izquierdo
+        if (idx > 0 && padre.hijos.get(idx - 1).claves.size() > MIN_CLAVES) {
             Nodo hermanoIzq = padre.hijos.get(idx - 1);
-            if (hermanoIzq.claves.size() > MIN_CLAVES) {
-                // Rotar derecha
-                int clavePadre = padre.claves.get(idx - 1);
-                int claveHermano = hermanoIzq.claves.remove(hermanoIzq.claves.size() - 1);
-                Nodo hijoHermano = hermanoIzq.hijos.remove(hermanoIzq.hijos.size() - 1);
-                
-                nodo.claves.add(0, clavePadre);
-                padre.claves.set(idx - 1, claveHermano);
-                nodo.hijos.add(0, hijoHermano);
-                hijoHermano.padre = nodo;
-                return;
+            nodo.claves.add(0, padre.claves.get(idx - 1));
+            padre.claves.set(idx - 1, hermanoIzq.claves.remove(hermanoIzq.claves.size() - 1));
+            if (!hermanoIzq.esHoja) {
+                Nodo hijo = hermanoIzq.hijos.remove(hermanoIzq.hijos.size() - 1);
+                nodo.hijos.add(0, hijo);
+                hijo.padre = nodo;
             }
+            return;
         }
-        
-        // PRÉSTAMO DERECHO
-        if (idx < padre.hijos.size() - 1) {
+
+        // Préstamo derecho
+        if (idx < padre.hijos.size() - 1 && padre.hijos.get(idx + 1).claves.size() > MIN_CLAVES) {
             Nodo hermanoDer = padre.hijos.get(idx + 1);
-            if (hermanoDer.claves.size() > MIN_CLAVES) {
-                // Rotar izquierda
-                int clavePadre = padre.claves.get(idx);
-                int claveHermano = hermanoDer.claves.remove(0);
-                Nodo hijoHermano = hermanoDer.hijos.remove(0);
-                
-                nodo.claves.add(clavePadre);
-                padre.claves.set(idx, claveHermano);
-                nodo.hijos.add(hijoHermano);
-                hijoHermano.padre = nodo;
-                return;
+            nodo.claves.add(padre.claves.get(idx));
+            padre.claves.set(idx, hermanoDer.claves.remove(0));
+            if (!hermanoDer.esHoja) {
+                Nodo hijo = hermanoDer.hijos.remove(0);
+                nodo.hijos.add(hijo);
+                hijo.padre = nodo;
             }
+            return;
         }
-        
-        // FUSIÓN
+
+        // Fusión
         if (idx > 0) {
-            fusionarInternoConHermanoIzquierdo(padre, idx);
+            fusionarInternos(padre, idx - 1, idx);
         } else {
-            fusionarInternoConHermanoDerecho(padre, idx);
+            fusionarInternos(padre, idx, idx + 1);
         }
     }
-    
-    private void fusionarInternoConHermanoIzquierdo(Nodo padre, int idx) {
-        Nodo hermanoIzq = padre.hijos.get(idx - 1);
-        Nodo nodo = padre.hijos.get(idx);
-        
-        // Bajar clave separadora del padre
-        int clavePadre = padre.claves.get(idx - 1);
-        hermanoIzq.claves.add(clavePadre);
-        hermanoIzq.claves.addAll(nodo.claves);
-        
+
+    private void fusionarInternos(Nodo padre, int idxIzq, int idxDer) {
+        Nodo izquierdo = padre.hijos.get(idxIzq);
+        Nodo derecho = padre.hijos.get(idxDer);
+
+        // Bajar clave separadora y fusionar
+        izquierdo.claves.add(padre.claves.get(idxIzq));
+        izquierdo.claves.addAll(derecho.claves);
+
         // Mover hijos
-        for (Nodo hijo : nodo.hijos) {
-            hijo.padre = hermanoIzq;
-            hermanoIzq.hijos.add(hijo);
+        for (Nodo hijo : derecho.hijos) {
+            hijo.padre = izquierdo;
+            izquierdo.hijos.add(hijo);
         }
-        
+
         // Eliminar del padre
-        padre.claves.remove(idx - 1);
-        padre.hijos.remove(idx);
-        
-        // Verificar underflow en padre
-        if (padre != raiz && padre.claves.size() < MIN_CLAVES) {
+        padre.claves.remove(idxIzq);
+        padre.hijos.remove(idxDer);
+
+        // Verificar underflow recursivo
+        if (padre.claves.size() < MIN_CLAVES && padre != raiz) {
             corregirUnderflowInterno(padre);
         } else if (padre == raiz && padre.claves.isEmpty()) {
-            raiz = hermanoIzq;
-            raiz.padre = null;
-        }
-    }
-    
-    private void fusionarInternoConHermanoDerecho(Nodo padre, int idx) {
-        Nodo nodo = padre.hijos.get(idx);
-        Nodo hermanoDer = padre.hijos.get(idx + 1);
-        
-        // Bajar clave separadora del padre
-        int clavePadre = padre.claves.get(idx);
-        nodo.claves.add(clavePadre);
-        nodo.claves.addAll(hermanoDer.claves);
-        
-        // Mover hijos
-        for (Nodo hijo : hermanoDer.hijos) {
-            hijo.padre = nodo;
-            nodo.hijos.add(hijo);
-        }
-        
-        // Eliminar del padre
-        padre.claves.remove(idx);
-        padre.hijos.remove(idx + 1);
-        
-        // Verificar underflow en padre
-        if (padre != raiz && padre.claves.size() < MIN_CLAVES) {
-            corregirUnderflowInterno(padre);
-        } else if (padre == raiz && padre.claves.isEmpty()) {
-            raiz = nodo;
+            raiz = izquierdo;
             raiz.padre = null;
         }
     }
