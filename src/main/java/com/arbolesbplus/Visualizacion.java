@@ -1,125 +1,78 @@
 package com.arbolesbplus;
 
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import javax.swing.JFrame;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.geom.*;
+import javax.swing.*;
+import java.util.*;
 
-/**
- * Visualizador gráfico con claves separadas en recuadros individuales
- */
 public class Visualizacion {
 
     public static void visualizar(Nodo raiz) {
         if (raiz == null) {
-            javax.swing.JOptionPane.showMessageDialog(null, "El árbol está vacío.");
+            JOptionPane.showMessageDialog(null, "El árbol está vacío.");
             return;
         }
         
-        JFrame frame = new JFrame("🌳 Árbol B+ - Visualización");
+        JFrame frame = new JFrame("Visualizador B+ Pro (Zoom & Pan)");
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        frame.setSize(1000, 600);
+        frame.setSize(1200, 800);
 
-        PanelArbolConRecuadros panel = new PanelArbolConRecuadros(raiz);
-        JScrollPane scrollPane = new JScrollPane(panel);
-        scrollPane.getViewport().setBackground(new Color(245, 248, 250));
-        frame.add(scrollPane);
+        PanelArbolInteractivo panel = new PanelArbolInteractivo(raiz);
+        frame.add(panel);
 
+        frame.setLocationRelativeTo(null);
         frame.setVisible(true);
     }
 
-    /**
-     * Panel que dibuja cada clave en su propio recuadro
-     */
-    static class PanelArbolConRecuadros extends JPanel {
+    static class PanelArbolInteractivo extends JPanel {
         private Nodo raiz;
-        private final int ANCHO_CELDA = 35;    // Ancho de cada celda individual
-        private final int ALTO_CELDA = 30;     // Alto de cada celda individual
-        private final int ESPACIO_CELDAS = 2;  // Espacio entre celdas
-        private final int PADDING_NODO = 8;    // Espacio interno del nodo
-        private final int ESPACIO_VERTICAL = 90; // Distancia vertical entre niveles
+        private final int CELDA_ANCHO = 45;
+        private final int CELDA_ALTO = 35;
+        private final int ESP_VERTICAL = 120;
         
-        // Colores organizados por nivel
-        private final Color[] COLORES_FONDO_NIVEL = {
-            new Color(173, 216, 230), // Nivel 0 - LightBlue
-            new Color(144, 238, 144), // Nivel 1 - LightGreen
-            new Color(255, 218, 185), // Nivel 2 - Peach
-            new Color(221, 160, 221), // Nivel 3 - Plum
-            new Color(240, 230, 140), // Nivel 4 - Khaki
-            new Color(175, 238, 238), // Nivel 5 - PaleTurquoise
-        };
-        
-        private final Color COLOR_HOJA = new Color(230, 255, 230); // Verde claro para hojas
-        private final Color COLOR_BORDE = new Color(70, 70, 70);
-        private final Color COLOR_TEXTO = Color.BLACK;
-        private final Color COLOR_LINEA = new Color(120, 120, 120);
+        // Variables para Transformación (Zoom y Pan)
+        private double escala = 1.0;
+        private double translateX = 0;
+        private double translateY = 0;
+        private Point puntoPresionado;
 
-        public PanelArbolConRecuadros(Nodo raiz) {
+        private Map<Nodo, Point> posiciones = new HashMap<>();
+
+        public PanelArbolInteractivo(Nodo raiz) {
             this.raiz = raiz;
-            this.setBackground(new Color(250, 252, 255));
-            
-            // Calcular dimensiones necesarias
-            int[] dimensiones = calcularDimensiones(raiz);
-            this.setPreferredSize(new Dimension(
-                Math.max(900, dimensiones[0]), 
-                Math.max(500, dimensiones[1])
-            ));
-        }
-        
-        private int[] calcularDimensiones(Nodo nodo) {
-            if (nodo == null) return new int[]{0, 0};
-            
-            java.util.Queue<Object[]> cola = new java.util.LinkedList<>();
-            cola.add(new Object[]{nodo, 0}); // nodo y su posición x estimada
-            
-            int maxDerecha = 0;
-            int maxIzquierda = 0;
-            int maxNivel = 0;
-            
-            while (!cola.isEmpty()) {
-                int nodosNivel = cola.size();
-                maxNivel++;
-                
-                for (int i = 0; i < nodosNivel; i++) {
-                    Object[] obj = cola.poll();
-                    Nodo actual = (Nodo) obj[0];
-                    int posX = (int) obj[1];
-                    
-                    // Calcular ancho del nodo actual
-                    int anchoNodo = actual.claves.size() * (ANCHO_CELDA + ESPACIO_CELDAS) + PADDING_NODO * 2;
-                    
-                    // Actualizar límites
-                    maxIzquierda = Math.min(maxIzquierda, posX - anchoNodo/2);
-                    maxDerecha = Math.max(maxDerecha, posX + anchoNodo/2);
-                    
-                    // Encolar hijos
-                    if (!actual.esHoja) {
-                        int numHijos = actual.hijos.size();
-                        int espacioHijos = anchoNodo * 2;
-                        
-                        for (int j = 0; j < numHijos; j++) {
-                            int hijoPosX;
-                            if (numHijos == 1) {
-                                hijoPosX = posX;
-                            } else {
-                                hijoPosX = posX - espacioHijos/2 + (j * espacioHijos/(numHijos-1));
-                            }
-                            cola.add(new Object[]{actual.hijos.get(j), hijoPosX});
-                        }
+            this.setBackground(new Color(25, 25, 30));
+
+            // --- EVENTOS DE MOUSE PARA ZOOM Y ARRASTRE ---
+            MouseAdapter mouseHandler = new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    puntoPresionado = e.getPoint();
+                }
+
+                @Override
+                public void mouseDragged(MouseEvent e) {
+                    if (puntoPresionado != null) {
+                        translateX += e.getX() - puntoPresionado.x;
+                        translateY += e.getY() - puntoPresionado.y;
+                        puntoPresionado = e.getPoint();
+                        repaint();
                     }
                 }
-            }
-            
-            int anchoTotal = maxDerecha - maxIzquierda + 200; // Margen extra
-            int alturaTotal = maxNivel * ESPACIO_VERTICAL + 150;
-            
-            return new int[]{anchoTotal, alturaTotal};
+
+                @Override
+                public void mouseWheelMoved(MouseWheelEvent e) {
+                    double factorZoom = (e.getWheelRotation() < 0) ? 1.1 : 0.9;
+                    escala *= factorZoom;
+                    // Limitar zoom para no perderse
+                    escala = Math.max(0.1, Math.min(escala, 3.0));
+                    repaint();
+                }
+            };
+
+            addMouseListener(mouseHandler);
+            addMouseMotionListener(mouseHandler);
+            addMouseWheelListener(mouseHandler);
         }
 
         @Override
@@ -127,111 +80,91 @@ public class Visualizacion {
             super.paintComponent(g);
             Graphics2D g2 = (Graphics2D) g;
             
-            // Configuración de calidad
+            // Aplicar suavizado
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+            // --- APLICAR TRANSFORMACIÓN DE ZOOM Y PAN ---
+            AffineTransform at = new AffineTransform();
+            at.translate(translateX, translateY);
+            at.scale(escala, escala);
+            g2.transform(at);
+
+            // Calcular posiciones (puedes ajustar el ancho inicial según el tamaño del árbol)
+            posiciones.clear();
+            calcularPosiciones(raiz, 0, 100, 2000); 
+
+            dibujarConexiones(g2, raiz);
+            dibujarEnlacesHojas(g2);
             
-            // Dibujar título
-            g2.setColor(Color.DARK_GRAY);
-            g2.setFont(new Font("Arial", Font.BOLD, 14));
-            g2.drawString("Árbol B+ - Claves Separadas en Recuadros", 20, 25);
-            
-            // Dibujar árbol centrado
-            if (raiz != null) {
-                dibujarNodoConRecuadros(g2, raiz, getWidth() / 2, 60, getWidth() / 3, 0);
+            for (Map.Entry<Nodo, Point> entry : posiciones.entrySet()) {
+                dibujarNodo(g2, entry.getKey(), entry.getValue().x, entry.getValue().y);
             }
             
+            // Dibujar leyenda fija (opcional)
+            dibujarInterfazUI(g);
         }
 
-        private int dibujarNodoConRecuadros(Graphics2D g, Nodo nodo, int x, int y, int rangoHorizontal, int nivel) {
-            if (nodo == null) return 0;
-            
-            int numClaves = nodo.claves.size();
-            
-            // Seleccionar color según nivel y tipo de nodo
-            Color colorFondo;
-            if (nodo.esHoja) {
-                colorFondo = COLOR_HOJA;
-            } else {
-                colorFondo = nivel < COLORES_FONDO_NIVEL.length ? 
-                           COLORES_FONDO_NIVEL[nivel] : 
-                           COLORES_FONDO_NIVEL[COLORES_FONDO_NIVEL.length - 1];
-            }
-            
-            // Calcular dimensiones del contenedor del nodo
-            int anchoTotalCeldas = numClaves * (ANCHO_CELDA + ESPACIO_CELDAS) - ESPACIO_CELDAS;
-            int anchoContenedor = anchoTotalCeldas + PADDING_NODO * 2;
-            int inicioX = x - (anchoContenedor / 2);
-            
-            // Dibujar fondo del contenedor del nodo (solo para visualización)
-            if (nivel == 0) { // Solo para la raíz dibujamos un fondo
-                g.setColor(new Color(240, 240, 240, 100));
-                g.fillRoundRect(inicioX - 5, y - 5, anchoContenedor + 10, ALTO_CELDA + 10, 10, 10);
-            }
-            
-            // Dibujar cada clave en su propio recuadro
-            for (int i = 0; i < numClaves; i++) {
-                int celdaX = inicioX + PADDING_NODO + i * (ANCHO_CELDA + ESPACIO_CELDAS);
-                
-                // Dibujar fondo del recuadro
-                g.setColor(colorFondo);
-                g.fillRect(celdaX, y, ANCHO_CELDA, ALTO_CELDA);
-                
-                // Dibujar borde del recuadro
-                g.setColor(COLOR_BORDE);
-                g.setStroke(new java.awt.BasicStroke(1.2f));
-                g.drawRect(celdaX, y, ANCHO_CELDA, ALTO_CELDA);
-                
-                // Dibujar el número de la clave (centrado)
-                g.setColor(COLOR_TEXTO);
-                g.setFont(new Font("Arial", Font.BOLD, 11));
-                String texto = String.valueOf(nodo.claves.get(i));
-                
-                FontMetrics fm = g.getFontMetrics();
-                int textoX = celdaX + (ANCHO_CELDA - fm.stringWidth(texto)) / 2;
-                int textoY = y + (ALTO_CELDA - fm.getHeight()) / 2 + fm.getAscent();
-                
-                g.drawString(texto, textoX, textoY);
-            }
-            
-            // Etiqueta del tipo de nodo
-            g.setColor(Color.DARK_GRAY);
-            g.setFont(new Font("Arial", Font.ITALIC, 9));
-            String etiqueta = nodo.esHoja ? "Hoja" : ("Nivel " + nivel);
-            int etiquetaX = inicioX + anchoContenedor + 5;
-            g.drawString(etiqueta, etiquetaX, y + ALTO_CELDA/2 + 3);
-            
-            // Dibujar hijos si no es hoja
+        private void calcularPosiciones(Nodo nodo, int xInicio, int y, int ancho) {
+            if (nodo == null) return;
+            int xCentro = xInicio + ancho / 2;
+            posiciones.put(nodo, new Point(xCentro, y));
+
             if (!nodo.esHoja) {
                 int numHijos = nodo.hijos.size();
-                int nuevaY = y + ESPACIO_VERTICAL;
-                
-                // Calcular posición de los hijos
-                int espacioTotalHijos = Math.min(rangoHorizontal * 2, getWidth() - 100);
-                int inicioHijosX = x - (espacioTotalHijos / 2);
-                
                 for (int i = 0; i < numHijos; i++) {
-                    // Distribuir hijos uniformemente
-                    int hijoX;
-                    if (numHijos == 1) {
-                        hijoX = x;
-                    } else {
-                        hijoX = inicioHijosX + (i * espacioTotalHijos / (numHijos - 1));
-                    }
-                    
-                    // Dibujar línea conectora desde el centro del nodo padre
-                    int puntoOrigenX = inicioX + PADDING_NODO + (numClaves * (ANCHO_CELDA + ESPACIO_CELDAS)) / 2;
-                    g.setColor(COLOR_LINEA);
-                    g.setStroke(new java.awt.BasicStroke(1.0f));
-                    g.drawLine(puntoOrigenX, y + ALTO_CELDA, hijoX, nuevaY);
-                    
-                    // Dibujar hijo recursivamente
-                    dibujarNodoConRecuadros(g, nodo.hijos.get(i), hijoX, nuevaY, 
-                                          (int)(espacioTotalHijos * 0.4 / numHijos), nivel + 1);
+                    int nuevoAncho = ancho / numHijos;
+                    calcularPosiciones(nodo.hijos.get(i), xInicio + i * nuevoAncho, y + ESP_VERTICAL, nuevoAncho);
                 }
             }
+        }
+
+        private void dibujarNodo(Graphics2D g2, Nodo nodo, int xCentro, int y) {
+            int n = nodo.claves.size();
+            int totalAncho = n * CELDA_ANCHO;
+            int xInicio = xCentro - totalAncho / 2;
+
+            // Fondo del nodo
+            g2.setColor(nodo.esHoja ? new Color(46, 204, 113) : new Color(52, 152, 219));
+            g2.fillRoundRect(xInicio, y, totalAncho, CELDA_ALTO, 10, 10);
             
-            return y + ALTO_CELDA;
+            // Celdas
+            g2.setColor(Color.WHITE);
+            g2.setStroke(new BasicStroke(1.2f));
+            for (int i = 0; i < n; i++) {
+                int cx = xInicio + i * CELDA_ANCHO;
+                g2.drawRect(cx, y, CELDA_ANCHO, CELDA_ALTO);
+                
+                String clave = String.valueOf(nodo.claves.get(i));
+                g2.setFont(new Font("SansSerif", Font.BOLD, 14));
+                FontMetrics fm = g2.getFontMetrics();
+                g2.drawString(clave, cx + (CELDA_ANCHO - fm.stringWidth(clave))/2, y + 23);
+            }
+        }
+
+        private void dibujarConexiones(Graphics2D g2, Nodo nodo) {
+            if (nodo == null || nodo.esHoja) return;
+            Point pP = posiciones.get(nodo);
+            for (Nodo hijo : nodo.hijos) {
+                Point pH = posiciones.get(hijo);
+                g2.setColor(new Color(150, 150, 150, 100));
+                g2.draw(new Line2D.Double(pP.x, pP.y + CELDA_ALTO, pH.x, pH.y));
+                dibujarConexiones(g2, hijo);
+            }
+        }
+
+        private void dibujarEnlacesHojas(Graphics2D g2) {
+            // Lógica similar a la anterior para conectar hojas...
+            g2.setColor(new Color(46, 204, 113, 80));
+            // ... (código de líneas entre hojas)
+        }
+
+        private void dibujarInterfazUI(Graphics g) {
+            // Dibujar controles de ayuda en una esquina ignorando la transformación
+            Graphics2D gUI = (Graphics2D) g.create();
+            gUI.setColor(Color.WHITE);
+            gUI.setFont(new Font("Arial", Font.PLAIN, 12));
+            gUI.drawString("Vizualizador Grafica", 35, getHeight() - 20);
+            gUI.dispose();
         }
     }
 }

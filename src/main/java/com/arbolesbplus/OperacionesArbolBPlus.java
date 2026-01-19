@@ -8,46 +8,50 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 
 public class OperacionesArbolBPlus {
-
-    public Nodo raiz;
-    public static final int d = 2; // ORDEN 2: máximo 3 claves por nodo
     
-    // CONSTANTES CLARAS
-    private static final int MAX_CLAVES = 3;    // 2*d - 1 = 3
-    private static final int MIN_CLAVES = 1;    // d - 1 = 1
-
-    public OperacionesArbolBPlus() {
-        raiz = new Nodo(true, d);
+    public Nodo raiz;
+    private final int orden; // ORDEN del árbol B+
+    private final int maxClaves; // Máximo de claves por nodo
+    private final int minClaves; // Mínimo de claves por nodo
+    
+    public OperacionesArbolBPlus(int ordenUsuario) {
+        this.orden = ordenUsuario;
+        
+        // CONFIGURACIÓN: Máximo 4 claves, se divide a la 5ta
+        this.maxClaves = 4;    // Máximo de claves por nodo
+        this.minClaves = 2;    // Mínimo de claves por nodo (excepto raíz)
+        
+        raiz = new Nodo(true, this.orden);
     }
-
-    // ======================= INSERCIÓN ===========================
+    
+    // ======================= INSERCIÓN CORREGIDA ===========================
     
     public void insertar(int clave) {
+        if (raiz == null) {
+            raiz = new Nodo(true, orden);
+        }
+        
         Nodo hoja = buscarHoja(raiz, clave);
         insertarOrdenado(hoja.claves, clave);
-
-        // Si excede el máximo 2d-1 (es decir, llega a 2d)
-        if (hoja.claves.size() == 2 * d) {
+        
+        // Si excede el máximo de claves (4), dividir
+        if (hoja.claves.size() > maxClaves) {
             dividirHoja(hoja);
         }
     }
-
-    // Paso 2.2: Buscar página descendiente
+    
+    // Buscar página descendiente - CORREGIDO para B+
     private Nodo buscarHoja(Nodo actual, int clave) {
         if (actual.esHoja) return actual;
         
         int i = 0;
-        while (i < actual.claves.size() && clave > actual.claves.get(i)) {
-            i++;
-        }
-        // En B+, si clave es igual, va al hijo derecho (i+1)
-        if (i < actual.claves.size() && clave == actual.claves.get(i)) {
+        while (i < actual.claves.size() && clave >= actual.claves.get(i)) {
             i++;
         }
         return buscarHoja(actual.hijos.get(i), clave);
     }
-
-    // Inserción manual para evitar Collections.sort
+    
+    // Inserción ordenada manual
     private void insertarOrdenado(List<Integer> lista, int clave) {
         int i = 0;
         while (i < lista.size() && clave > lista.get(i)) {
@@ -55,38 +59,49 @@ public class OperacionesArbolBPlus {
         }
         lista.add(i, clave);
     }
-
+    
     private void dividirHoja(Nodo hoja) {
-        Nodo nuevaHoja = new Nodo(true, d);
-        int puntoCorte = d; 
-
-        // Mover la mitad derecha a la nueva hoja
-        nuevaHoja.claves.addAll(new ArrayList<>(hoja.claves.subList(puntoCorte, hoja.claves.size())));
+        Nodo nuevaHoja = new Nodo(true, orden);
+        
+        // Para máximo 4 claves, dividir cuando tenga 5
+        // En B+, la clave de división se DUPLICA en ambas hojas
+        int puntoCorte = (maxClaves + 1) / 2; // Para max=4: puntoCorte=2
+        
+        // Mover claves a la nueva hoja (incluyendo la clave de división)
+        for (int i = puntoCorte; i < hoja.claves.size(); i++) {
+            nuevaHoja.claves.add(hoja.claves.get(i));
+        }
+        
+        // Eliminar las claves movidas (mantener la clave de división en la hoja original)
+        // En B+, la clave de división se queda en AMBAS hojas
         hoja.claves.subList(puntoCorte, hoja.claves.size()).clear();
-
-        // CORRECCIÓN: Conectar las hojas en la lista enlazada
+        
+        // Conectar las hojas en la lista enlazada
         nuevaHoja.siguiente = hoja.siguiente;
         hoja.siguiente = nuevaHoja;
-
-        // En B+, la primera clave de la nueva hoja sube al padre como guía
+        
+        // En B+, la primera clave de la nueva hoja sube al padre
         int claveSubir = nuevaHoja.claves.get(0);
         manejarSubida(hoja, claveSubir, nuevaHoja);
     }
-
+    
     private void manejarSubida(Nodo izquierdo, int clave, Nodo derecho) {
         if (izquierdo == raiz) {
-            Nodo nuevaRaiz = new Nodo(false, d);
+            Nodo nuevaRaiz = new Nodo(false, orden);
             nuevaRaiz.claves.add(clave);
             nuevaRaiz.hijos.add(izquierdo);
             nuevaRaiz.hijos.add(derecho);
             raiz = nuevaRaiz;
-            izquierdo.padre = derecho.padre = raiz;
+            izquierdo.padre = raiz;
+            derecho.padre = raiz;
             return;
         }
-
+        
         Nodo padre = izquierdo.padre;
+        if (padre == null) return;
+        
         derecho.padre = padre;
-
+        
         // Insertar clave e hijo en el padre manteniendo el orden
         int i = 0;
         while (i < padre.claves.size() && clave > padre.claves.get(i)) {
@@ -94,342 +109,270 @@ public class OperacionesArbolBPlus {
         }
         padre.claves.add(i, clave);
         padre.hijos.add(i + 1, derecho);
-
-        // Si el padre se llena (2d), se divide también
-        if (padre.claves.size() == 2 * d) {
+        
+        // Si el padre se llena (más de 4 claves), se divide también
+        if (padre.claves.size() > maxClaves) {
             dividirNodoInterno(padre);
         }
     }
-
+    
     private void dividirNodoInterno(Nodo nodo) {
-        Nodo nuevoNodo = new Nodo(false, d);
-        int m = d; 
+        Nodo nuevoNodo = new Nodo(false, orden);
+        
+        // Para máximo 4 claves, dividir cuando tenga 5
+        // En nodos internos, la mediana sube al padre y NO se queda en los hijos
+        int m = nodo.claves.size() / 2;  // Para 5 claves: m=2 (la tercera clave sube)
         int claveSubir = nodo.claves.get(m);
-
-        // Mover elementos a la derecha de la mediana al nuevo nodo
-        nuevoNodo.claves.addAll(new ArrayList<>(nodo.claves.subList(m + 1, nodo.claves.size())));
-        nuevoNodo.hijos.addAll(new ArrayList<>(nodo.hijos.subList(m + 1, nodo.hijos.size())));
-
-        for (Nodo hijo : nuevoNodo.hijos) hijo.padre = nuevoNodo;
-
-        // Limpiar el nodo original (la mediana sube y se quita de aquí)
+        
+        // Mover claves a la derecha de la mediana al nuevo nodo
+        for (int i = m + 1; i < nodo.claves.size(); i++) {
+            nuevoNodo.claves.add(nodo.claves.get(i));
+        }
+        
+        // Mover hijos (los hijos del nuevo nodo comienzan en m+1)
+        for (int i = m + 1; i < nodo.hijos.size(); i++) {
+            Nodo hijo = nodo.hijos.get(i);
+            nuevoNodo.hijos.add(hijo);
+            hijo.padre = nuevoNodo;
+        }
+        
+        // Limpiar el nodo original (eliminar desde m inclusive)
         nodo.claves.subList(m, nodo.claves.size()).clear();
         nodo.hijos.subList(m + 1, nodo.hijos.size()).clear();
-
+        
         manejarSubida(nodo, claveSubir, nuevoNodo);
     }
     
-    // ======================= ELIMINACIÓN COMPACTA =========================
-
+    // ======================= ELIMINACIÓN (sin cambios) =========================
+    
     public void eliminar(int clave) {
         if (raiz == null) return;
-
+        
         Nodo hoja = buscarHoja(raiz, clave);
         int idx = hoja.claves.indexOf(clave);
-
+        
         if (idx == -1) return;
-
+        
         boolean esPrimeraClave = (idx == 0);
         int claveEliminada = hoja.claves.get(idx);
-
+        
         hoja.claves.remove(idx);
-
+        
         // Corrección de underflow en hojas
-        if (hoja != raiz && hoja.claves.size() < MIN_CLAVES) {
+        if (hoja != raiz && hoja.claves.size() < minClaves) {
             corregirUnderflowHoja(hoja);
         }
-
+        
         // Actualizar índice si se eliminó la primera clave
         if (esPrimeraClave && !hoja.claves.isEmpty()) {
             actualizarIndices(claveEliminada, hoja.claves.get(0));
         }
-
+        
         // Caso especial: raíz hoja vacía
         if (hoja == raiz && hoja.claves.isEmpty()) {
             raiz = null;
         }
     }
+    
     private void actualizarIndices(int viejaClave, int nuevaClave) {
-    if (raiz == null || raiz.esHoja) return;
-    
-    Nodo actual = raiz;
-    boolean encontrado = false;
-    
-    // Buscar la clave vieja en los índices
-    while (!actual.esHoja && !encontrado) {
-        for (int i = 0; i < actual.claves.size(); i++) {
-            if (actual.claves.get(i) == viejaClave) {
-                actual.claves.set(i, nuevaClave);
-                encontrado = true;
-                break;
-            }
-        }
+        if (raiz == null || raiz.esHoja) return;
         
-        // Si no se encontró, ir al hijo adecuado
-        if (!encontrado) {
+        Nodo actual = raiz;
+        while (!actual.esHoja) {
+            boolean encontrado = false;
+            for (int i = 0; i < actual.claves.size(); i++) {
+                if (actual.claves.get(i) == viejaClave) {
+                    actual.claves.set(i, nuevaClave);
+                    encontrado = true;
+                    break;
+                }
+            }
+            
+            if (encontrado) break;
+            
+            // Buscar hijo adecuado
             int i = 0;
-            while (i < actual.claves.size() && viejaClave >= actual.claves.get(i)) {
+            while (i < actual.claves.size() && viejaClave > actual.claves.get(i)) {
                 i++;
             }
-            if (i < actual.hijos.size()) {
-                actual = actual.hijos.get(i);
-            } else {
-                break;
-            }
+            actual = actual.hijos.get(i);
         }
     }
-    }
-
+    
     private void corregirUnderflowHoja(Nodo hoja) {
         Nodo padre = hoja.padre;
         if (padre == null) return;
-
+        
         int idx = padre.hijos.indexOf(hoja);
-
+        
         // Intentar préstamo izquierdo
-        if (idx > 0 && padre.hijos.get(idx - 1).claves.size() > MIN_CLAVES) {
+        if (idx > 0) {
             Nodo hermanoIzq = padre.hijos.get(idx - 1);
-            int clavePrestada = hermanoIzq.claves.remove(hermanoIzq.claves.size() - 1);
-            hoja.claves.add(0, clavePrestada);
-            padre.claves.set(idx - 1, hoja.claves.get(0));
-            return;
+            if (hermanoIzq.claves.size() > minClaves) {
+                int clavePrestada = hermanoIzq.claves.remove(hermanoIzq.claves.size() - 1);
+                hoja.claves.add(0, clavePrestada);
+                padre.claves.set(idx - 1, hoja.claves.get(0));
+                return;
+            }
         }
-
+        
         // Intentar préstamo derecho
-        if (idx < padre.hijos.size() - 1 && padre.hijos.get(idx + 1).claves.size() > MIN_CLAVES) {
+        if (idx < padre.hijos.size() - 1) {
             Nodo hermanoDer = padre.hijos.get(idx + 1);
-            int clavePrestada = hermanoDer.claves.remove(0);
-            hoja.claves.add(clavePrestada);
-            padre.claves.set(idx, hermanoDer.claves.get(0));
-            return;
+            if (hermanoDer.claves.size() > minClaves) {
+                int clavePrestada = hermanoDer.claves.remove(0);
+                hoja.claves.add(clavePrestada);
+                padre.claves.set(idx, hermanoDer.claves.get(0));
+                return;
+            }
         }
-
-        // Fusión (con izquierdo si existe, sino con derecho)
+        
+        // Fusión
         if (idx > 0) {
             fusionarHojas(padre, idx - 1, idx);
-        } else {
+        } else if (idx < padre.hijos.size() - 1) {
             fusionarHojas(padre, idx, idx + 1);
         }
     }
-
+    
     private void fusionarHojas(Nodo padre, int idxIzq, int idxDer) {
         Nodo izquierdo = padre.hijos.get(idxIzq);
         Nodo derecho = padre.hijos.get(idxDer);
-
-        // Mover claves del derecho al izquierdo
+        
+        // Mover todas las claves del derecho al izquierdo
         izquierdo.claves.addAll(derecho.claves);
         izquierdo.siguiente = derecho.siguiente;
-
-        // Eliminar clave separadora y nodo derecho
+        
+        // Eliminar clave separadora del padre
         padre.claves.remove(idxIzq);
         padre.hijos.remove(idxDer);
-
+        
         // Verificar underflow en padre
-        if (padre.claves.size() < MIN_CLAVES && padre != raiz) {
-            corregirUnderflowInterno(padre);
-        } else if (padre == raiz && padre.claves.isEmpty()) {
+        if (padre == raiz && padre.claves.isEmpty()) {
             raiz = izquierdo;
             raiz.padre = null;
+        } else if (padre != raiz && padre.claves.size() < minClaves) {
+            corregirUnderflowInterno(padre);
         }
     }
-
+    
     private void corregirUnderflowInterno(Nodo nodo) {
-        if (nodo == raiz && nodo.claves.isEmpty()) {
-            if (!nodo.hijos.isEmpty()) {
+        if (nodo == raiz) {
+            if (nodo.claves.isEmpty() && !nodo.hijos.isEmpty()) {
                 raiz = nodo.hijos.get(0);
                 raiz.padre = null;
             }
             return;
         }
-
+        
         Nodo padre = nodo.padre;
         if (padre == null) return;
-
+        
         int idx = padre.hijos.indexOf(nodo);
-
+        
         // Préstamo izquierdo
-        if (idx > 0 && padre.hijos.get(idx - 1).claves.size() > MIN_CLAVES) {
+        if (idx > 0) {
             Nodo hermanoIzq = padre.hijos.get(idx - 1);
-            nodo.claves.add(0, padre.claves.get(idx - 1));
-            padre.claves.set(idx - 1, hermanoIzq.claves.remove(hermanoIzq.claves.size() - 1));
-            if (!hermanoIzq.esHoja) {
-                Nodo hijo = hermanoIzq.hijos.remove(hermanoIzq.hijos.size() - 1);
-                nodo.hijos.add(0, hijo);
-                hijo.padre = nodo;
+            if (hermanoIzq.claves.size() > minClaves) {
+                // Rotar clave del padre
+                nodo.claves.add(0, padre.claves.get(idx - 1));
+                padre.claves.set(idx - 1, hermanoIzq.claves.remove(hermanoIzq.claves.size() - 1));
+                
+                // Rotar hijo si es necesario
+                if (!hermanoIzq.esHoja && !hermanoIzq.hijos.isEmpty()) {
+                    Nodo hijo = hermanoIzq.hijos.remove(hermanoIzq.hijos.size() - 1);
+                    nodo.hijos.add(0, hijo);
+                    hijo.padre = nodo;
+                }
+                return;
             }
-            return;
         }
-
+        
         // Préstamo derecho
-        if (idx < padre.hijos.size() - 1 && padre.hijos.get(idx + 1).claves.size() > MIN_CLAVES) {
+        if (idx < padre.hijos.size() - 1) {
             Nodo hermanoDer = padre.hijos.get(idx + 1);
-            nodo.claves.add(padre.claves.get(idx));
-            padre.claves.set(idx, hermanoDer.claves.remove(0));
-            if (!hermanoDer.esHoja) {
-                Nodo hijo = hermanoDer.hijos.remove(0);
-                nodo.hijos.add(hijo);
-                hijo.padre = nodo;
+            if (hermanoDer.claves.size() > minClaves) {
+                // Rotar clave del padre
+                nodo.claves.add(padre.claves.get(idx));
+                padre.claves.set(idx, hermanoDer.claves.remove(0));
+                
+                // Rotar hijo si es necesario
+                if (!hermanoDer.esHoja && !hermanoDer.hijos.isEmpty()) {
+                    Nodo hijo = hermanoDer.hijos.remove(0);
+                    nodo.hijos.add(hijo);
+                    hijo.padre = nodo;
+                }
+                return;
             }
-            return;
         }
-
+        
         // Fusión
         if (idx > 0) {
             fusionarInternos(padre, idx - 1, idx);
-        } else {
+        } else if (idx < padre.hijos.size() - 1) {
             fusionarInternos(padre, idx, idx + 1);
         }
     }
-
+    
     private void fusionarInternos(Nodo padre, int idxIzq, int idxDer) {
         Nodo izquierdo = padre.hijos.get(idxIzq);
         Nodo derecho = padre.hijos.get(idxDer);
-
-        // Bajar clave separadora y fusionar
+        
+        // Bajar clave separadora
         izquierdo.claves.add(padre.claves.get(idxIzq));
         izquierdo.claves.addAll(derecho.claves);
-
+        
         // Mover hijos
         for (Nodo hijo : derecho.hijos) {
             hijo.padre = izquierdo;
             izquierdo.hijos.add(hijo);
         }
-
+        
         // Eliminar del padre
         padre.claves.remove(idxIzq);
         padre.hijos.remove(idxDer);
-
+        
         // Verificar underflow recursivo
-        if (padre.claves.size() < MIN_CLAVES && padre != raiz) {
-            corregirUnderflowInterno(padre);
-        } else if (padre == raiz && padre.claves.isEmpty()) {
+        if (padre == raiz && padre.claves.isEmpty()) {
             raiz = izquierdo;
             raiz.padre = null;
+        } else if (padre != raiz && padre.claves.size() < minClaves) {
+            corregirUnderflowInterno(padre);
         }
     }
-
-     // ================= BUSQUEDA =============================
-//Algoritmo BuscarEnArbolBPlus(raiz, claveBuscada)
-//    Si (raiz == NULL) Entonces
-//        Escribir("El árbol está vacío")
-//        Retornar FALSO
-//    Fin Si
-//    nodoActual <- raiz
-//    Mientras (nodoActual.esHoja == FALSO) Repetir
-//        i <- 0
-//        Mientras (i < Tamaño(nodoActual.claves) Y claveBuscada > nodoActual.claves[i]) Repetir
-//            i <- i + 1
-//        Fin Mientras
-        // Regla del B+: si es igual, ir al hijo derecho
-//        Si (i < Tamaño(nodoActual.claves) Y claveBuscada == nodoActual.claves[i]) Entonces
-//            i <- i + 1
-//        Fin Si
-//        nodoActual <- nodoActual.hijos[i]
-//    Fin Mientras
-    // Ya estamos en una hoja
-//    i <- 0
-//    Mientras (i < Tamaño(nodoActual.claves)) Repetir
-//        Si (nodoActual.claves[i] == claveBuscada) Entonces
-//            Escribir("Clave encontrada")
-//            Retornar VERDADERO
-//        Fin Si
-//        i <- i + 1
-//    Fin Mientras
-// Escribir("Clave NO encontrada")
-//  Retornar FALSO
-//Fin Algoritmo BuscarEnArbolBPlus
-
-// Método público que inicia la búsqueda y muestra el resultado en una ventana
-public void buscarYMostrar(int clave) {
-    // Verifica si el árbol está vacío
-    if (raiz == null) {
-        // Muestra mensaje si no hay nodos en el árbol
-        JOptionPane.showMessageDialog(null, "El árbol está vacío.");
-        return; // Sale del método
+    
+    // ================= BUSQUEDA =============================
+    
+    public void buscarYMostrar(int clave) {
+        if (raiz == null) {
+            JOptionPane.showMessageDialog(null, "El árbol está vacío.");
+            return;
+        }
+        
+        boolean encontrado = buscarRecursivo(raiz, clave);
+        if (encontrado) {
+            JOptionPane.showMessageDialog(null,
+                    "La clave " + clave + " SI existe en el árbol B+");
+        } else {
+            JOptionPane.showMessageDialog(null,
+                    "La clave " + clave + " NO existe en el árbol B+");
+        }
     }
-    // Llama al método recursivo para buscar la clave desde la raíz
-    boolean encontrado = buscarRecursivo(raiz, clave);
-    // Si la clave fue encontrada
-    if (encontrado) {
-        // Muestra mensaje positivo
-        JOptionPane.showMessageDialog(null,
-                "La clave " + clave + " SI existe en el árbol B+");
-    } else {
-        // Si no fue encontrada, muestra mensaje negativo
-        JOptionPane.showMessageDialog(null,
-                "La clave " + clave + " NO existe en el árbol B+");
+    
+    private boolean buscarRecursivo(Nodo actual, int clave) {
+        if (actual.esHoja) {
+            return actual.claves.contains(clave);
+        }
+        
+        int i = 0;
+        while (i < actual.claves.size() && clave >= actual.claves.get(i)) {
+            i++;
+        }
+        return buscarRecursivo(actual.hijos.get(i), clave);
     }
-}
-// Método privado recursivo que recorre el árbol B+ para buscar la clave
-private boolean buscarRecursivo(Nodo actual, int clave) {
-    // Variable para recorrer las claves del nodo actual
-    int i = 0;
-    // Avanza mientras la clave buscada sea mayor que la clave actual del nodo
-    while (i < actual.claves.size() && clave > actual.claves.get(i)) {
-        i++; // Mueve el índice a la siguiente clave
-    }
-    // Si el nodo actual es una hoja del árbol B+
-    if (actual.esHoja) {
-        // Verifica si la clave existe exactamente en esta posición
-        return (i < actual.claves.size() && actual.claves.get(i) == clave);
-    }
-    // Si no es hoja y la clave coincide con una clave separadora del nodo
-    // En árboles B+, se baja al hijo derecho
-    if (i < actual.claves.size() && clave == actual.claves.get(i)) {
-        i++; // Se mueve al hijo derecho correspondiente
-    }
-    // Llamada recursiva para continuar la búsqueda en el hijo adecuado
-    return buscarRecursivo(actual.hijos.get(i), clave);
-}
     
     // ================= VISUALIZACIÓN =============================
-        /*
-        Algoritmo ImprimirPorNiveles
-        Si (raiz == NULL) Entonces
-            Retornar
-        Fin Si
-        Crear(sb)
-        Crear(cola)
-        Encolar(cola, raiz)
-        nivel <- 0
-        Mientras (cola NO esté vacía) Repetir
-            nodosNivel <- Tamaño(cola)
-            Escribir("Nivel ", nivel, ": ")
-            i <- 0
-            Mientras (i < nodosNivel) Repetir
-                nodo <- Desencolar(cola)
-                Escribir("[ ")
-                j <- 0
-                Mientras (j < nodo.n) Repetir
-                    Escribir(nodo.claves[j])
-                    Si (j < nodo.n - 1) Entonces
-                        Escribir(" | ")
-                    Fin Si
-                    j <- j + 1
-                Fin Mientras
-                Escribir(" ]  ")
-                Si (nodo.esHoja == Falso) Entonces
-                    j <- 0
-                    Mientras (j <= nodo.n) Repetir
-                        Si (nodo.hijos[j] != NULL) Entonces
-                            Encolar(cola, nodo.hijos[j])
-                        Fin Si
-                        j <- j + 1
-                    Fin Mientras
-                Fin Si
-                i <- i + 1
-            Fin Mientras
-            EscribirSaltoLinea
-            nivel <- nivel + 1
-        Fin Mientras
-        MostrarVentana(sb)
-        Fin Algoritmo ImprimirPorNiveles
-        */
-
-    /**
-     * Muestra el árbol por niveles en una ventana gráfica.
-     * Usa recorrido BFS (por anchura).
-     */
+    
     public void imprimirPorNiveles() {
         if (raiz == null) {
             JOptionPane.showMessageDialog(null, "El árbol está vacío.");
@@ -466,9 +409,10 @@ private boolean buscarRecursivo(Nodo actual, int clave) {
         // Mostrar hojas enlazadas
         sb.append("\nHojas enlazadas: ");
         Nodo hoja = raiz;
-        while (!hoja.esHoja && !hoja.hijos.isEmpty()) {
+        while (hoja != null && !hoja.esHoja && !hoja.hijos.isEmpty()) {
             hoja = hoja.hijos.get(0);
         }
+        
         while (hoja != null) {
             sb.append("[");
             for (int j = 0; j < hoja.claves.size(); j++) {
